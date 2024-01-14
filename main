@@ -1,0 +1,162 @@
+#include <iostream>
+#include <string>
+#include "sqlite3.c"
+
+using namespace std;
+
+const int MAX_SIZE = 100; // Maximum number of credentials
+
+class PasswordManager {
+public:
+    virtual void addPassword(const string& website, const string& username, const string& password) = 0;
+    virtual void displayPasswords() const = 0;
+    virtual void deletePassword(const string& website) = 0;
+    virtual ~PasswordManager() {}
+};
+
+class SQLitePasswordManager : public PasswordManager {
+private:
+    sqlite3* db;
+    int count;
+
+public:
+    SQLitePasswordManager() {
+        int rc = sqlite3_open("passwords.db", &db);
+        if (rc != SQLITE_OK) {
+            cerr << "Cannot open the database: " << sqlite3_errmsg(db) << endl;
+            exit(1);
+        }
+
+        // Create a table if not exists
+        const char* createTableQuery = "CREATE TABLE IF NOT EXISTS passwords (id INTEGER PRIMARY KEY, website TEXT, username TEXT, password TEXT);";
+        rc = sqlite3_exec(db, createTableQuery, 0, 0, 0);
+        if (rc != SQLITE_OK) {
+            cerr << "Cannot create table: " << sqlite3_errmsg(db) << endl;
+            exit(1);
+        }
+
+        count = 0;
+    }
+
+    ~SQLitePasswordManager() {
+        sqlite3_close(db);
+    }
+
+    void addPassword(const string& website, const string& username, const string& password) override {
+        if (count < MAX_SIZE) {
+            // Insert the password into the SQLite database
+            string insertQuery = "INSERT INTO passwords (website, username, password) VALUES (?, ?, ?);";
+            sqlite3_stmt* stmt;
+            int rc = sqlite3_prepare_v2(db, insertQuery.c_str(), -1, &stmt, 0);
+            if (rc != SQLITE_OK) {
+                cerr << "Error preparing SQL statement: " << sqlite3_errmsg(db) << endl;
+                return;
+            }
+
+            // Bind parameters
+            sqlite3_bind_text(stmt, 1, website.c_str(), -1, SQLITE_STATIC);
+            sqlite3_bind_text(stmt, 2, username.c_str(), -1, SQLITE_STATIC);
+            sqlite3_bind_text(stmt, 3, password.c_str(), -1, SQLITE_STATIC);
+
+            // Execute the statement
+            rc = sqlite3_step(stmt);
+            if (rc != SQLITE_DONE) {
+                cerr << "Error inserting password: " << sqlite3_errmsg(db) << endl;
+            } else {
+                cout << "Password added successfully for " << website << endl;
+                count++;
+            }
+
+            sqlite3_finalize(stmt);
+        } else {
+            cout << "Maximum credentials limit reached. Cannot add more passwords." << endl;
+        }
+    }
+
+    void displayPasswords() const override {
+        cout << "Stored Passwords:" << endl;
+
+        // Select all passwords from the database and display them
+        const char* selectQuery = "SELECT * FROM passwords;";
+        sqlite3_stmt* stmt;
+        int rc = sqlite3_prepare_v2(db, selectQuery, -1, &stmt, 0);
+
+        while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+            cout << "\tWebsite: " << sqlite3_column_text(stmt, 1) << ",\tUsername: " << sqlite3_column_text(stmt, 2) << ",\tPassword: " << sqlite3_column_text(stmt, 3) << endl;
+        }
+
+        sqlite3_finalize(stmt);
+    }
+
+    void deletePassword(const string& website) override {
+        string deleteQuery = "DELETE FROM passwords WHERE website = ?;";
+        sqlite3_stmt* stmt;
+        int rc = sqlite3_prepare_v2(db, deleteQuery.c_str(), -1, &stmt, 0);
+
+        if (rc != SQLITE_OK) {
+            cerr << "Error preparing SQL statement: " << sqlite3_errmsg(db) << endl;
+            return;
+        }
+
+        sqlite3_bind_text(stmt, 1, website.c_str(), -1, SQLITE_STATIC);
+
+        rc = sqlite3_step(stmt);
+        if (rc == SQLITE_DONE) {
+            cout << "Password for " << website << " deleted successfully." << endl;
+            count--;
+        } else {
+            cerr << "Error deleting password: " << sqlite3_errmsg(db) << endl;
+        }
+
+        sqlite3_finalize(stmt);
+    }
+};
+
+int main() {
+    SQLitePasswordManager passwordManager;
+    int choice = 0;
+
+    for (; choice != 4;) {
+        cout << "\nPassword Manager Menu:\n"
+             << "1. Add Password\n"
+             << "2. Delete Password\n"
+             << "3. Display Passwords\n"
+             << "4. Exit\n"
+             << "Enter your choice: ";
+        cin >> choice;
+
+        switch (choice) {
+            case 1: {
+                string website, username, password;
+                cout << "\nEnter website: ";
+                cin.ignore(); // Clear any previous newline character
+                getline(cin, website);
+                cout << "Enter username: ";
+                getline(cin, username);
+                cout << "Enter password: ";
+                getline(cin, password);
+                passwordManager.addPassword(website, username, password);
+                break;
+            }
+            case 2: {
+                string website;
+                cout << "\nEnter website to delete password: ";
+                cin.ignore(); // Clear any previous newline character
+                getline(cin, website);
+                passwordManager.deletePassword(website);
+                break;
+            }
+            case 3:
+                cout << "\n" << endl;
+                passwordManager.displayPasswords();
+                break;
+            case 4:
+                cout << "\nExiting...\n";
+                break;
+            default:
+                cout << "Invalid choice. Please enter a valid option.\n";
+        }
+    }
+
+    return 0;
+}
