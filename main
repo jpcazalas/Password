@@ -1,17 +1,39 @@
+//
+//  main.cpp
+//  password
+//
+//  Created by Jean-Philippe Cazalas on 14/01/2024.
+//
 #include <iostream>
 #include <string>
-#include "sqlite3.c"
+#include <sqlite3.h>
 
 using namespace std;
 
 const int MAX_SIZE = 100; // Maximum number of credentials
+string encryptionKey = "123456"; // Global encryption key
 
 class PasswordManager {
 public:
     virtual void addPassword(const string& website, const string& username, const string& password) = 0;
-    virtual void displayPasswords() const = 0;
+    virtual void displayPasswords(bool decrypt = false) const = 0;
     virtual void deletePassword(const string& website) = 0;
     virtual ~PasswordManager() {}
+};
+
+class SimpleEncryption {
+public:
+    static string encrypt(const string& input) {
+        string result = input;
+        for (size_t i = 0; i < result.length(); ++i) {
+            result[i] = result[i] ^ encryptionKey[i % encryptionKey.length()];
+        }
+        return result;
+    }
+
+    static string decrypt(const string& input) {
+        return encrypt(input); // Decryption is the same as encryption
+    }
 };
 
 class SQLitePasswordManager : public PasswordManager {
@@ -45,6 +67,7 @@ public:
     void addPassword(const string& website, const string& username, const string& password) override {
         if (count < MAX_SIZE) {
             // Insert the password into the SQLite database
+            string encryptedPassword = SimpleEncryption::encrypt(password);
             string insertQuery = "INSERT INTO passwords (website, username, password) VALUES (?, ?, ?);";
             sqlite3_stmt* stmt;
             int rc = sqlite3_prepare_v2(db, insertQuery.c_str(), -1, &stmt, 0);
@@ -56,7 +79,7 @@ public:
             // Bind parameters
             sqlite3_bind_text(stmt, 1, website.c_str(), -1, SQLITE_STATIC);
             sqlite3_bind_text(stmt, 2, username.c_str(), -1, SQLITE_STATIC);
-            sqlite3_bind_text(stmt, 3, password.c_str(), -1, SQLITE_STATIC);
+            sqlite3_bind_text(stmt, 3, encryptedPassword.c_str(), -1, SQLITE_STATIC);
 
             // Execute the statement
             rc = sqlite3_step(stmt);
@@ -73,7 +96,7 @@ public:
         }
     }
 
-    void displayPasswords() const override {
+    void displayPasswords(bool decrypt = false) const override {
         cout << "Stored Passwords:" << endl;
 
         // Select all passwords from the database and display them
@@ -82,7 +105,13 @@ public:
         int rc = sqlite3_prepare_v2(db, selectQuery, -1, &stmt, 0);
 
         while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
-            cout << "\tWebsite: " << sqlite3_column_text(stmt, 1) << ",\tUsername: " << sqlite3_column_text(stmt, 2) << ",\tPassword: " << sqlite3_column_text(stmt, 3) << endl;
+            string website = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+            string username = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+            string encryptedPassword = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+
+            string displayedPassword = decrypt ? SimpleEncryption::decrypt(encryptedPassword) : "********";
+
+            cout << "\tWebsite: " << website << ",\tUsername: " << username << ",\tPassword: " << displayedPassword << endl;
         }
 
         sqlite3_finalize(stmt);
@@ -116,12 +145,14 @@ int main() {
     SQLitePasswordManager passwordManager;
     int choice = 0;
 
-    for (; choice != 4;) {
+    for (; choice != 6;) {
         cout << "\nPassword Manager Menu:\n"
              << "1. Add Password\n"
              << "2. Delete Password\n"
              << "3. Display Passwords\n"
-             << "4. Exit\n"
+             << "4. Display Decrypted Passwords\n"
+             << "5. Change Encryption Key\n"
+             << "6. Exit\n"
              << "Enter your choice: ";
         cin >> choice;
 
@@ -151,6 +182,16 @@ int main() {
                 passwordManager.displayPasswords();
                 break;
             case 4:
+                cout << "\nEnter Encryption Key: ";
+                cin >> encryptionKey;
+                cout << "\n" << endl;
+                passwordManager.displayPasswords(true); // Pass true to display decrypted passwords
+                break;
+            case 5:
+                cout << "\nEnter New Encryption Key: ";
+                cin >> encryptionKey;
+                break;
+            case 6:
                 cout << "\nExiting...\n";
                 break;
             default:
