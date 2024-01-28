@@ -130,7 +130,26 @@ public:
     }
 
     void deletePassword(const string& website) override {
-        // ... (votre code existant pour supprimer le mot de passe)
+        string deleteQuery = "DELETE FROM passwords WHERE website = ?;";
+               sqlite3_stmt* stmt;
+               int rc = sqlite3_prepare_v2(db, deleteQuery.c_str(), -1, &stmt, 0);
+
+               if (rc != SQLITE_OK) {
+                   cerr << "Error preparing SQL statement: " << sqlite3_errmsg(db) << endl;
+                   return;
+               }
+
+               sqlite3_bind_text(stmt, 1, website.c_str(), -1, SQLITE_STATIC);
+
+               rc = sqlite3_step(stmt);
+               if (rc == SQLITE_DONE) {
+                   cout << "Password for " << website << " deleted successfully." << endl;
+                   count--;
+               } else {
+                   cerr << "Error deleting password: " << sqlite3_errmsg(db) << endl;
+               }
+
+               sqlite3_finalize(stmt);
     }
 };
 
@@ -151,11 +170,23 @@ int main() {
 
         switch (choice) {
             case 1: {
-                // ... (votre code existant pour ajouter le mot de passe)
+                string website, username, password;
+                               cout << "\nEnter website: ";
+                               cin.ignore(); // Clear any previous newline character
+                               getline(cin, website);
+                               cout << "Enter username: ";
+                               getline(cin, username);
+                               cout << "Enter password: ";
+                               getline(cin, password);
+                               passwordManager.addPassword(website, username, password);
                 break;
             }
             case 2: {
-                // ... (votre code existant pour supprimer le mot de passe)
+                string website;
+                              cout << "\nEnter website to delete password: ";
+                              cin.ignore(); // Clear any previous newline character
+                              getline(cin, website);
+                              passwordManager.deletePassword(website);
                 break;
             }
             case 3:
@@ -180,4 +211,3 @@ int main() {
 
     return 0;
 }
-
