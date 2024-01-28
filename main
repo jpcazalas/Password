@@ -97,6 +97,18 @@ public:
     }
 
     void displayPasswords(bool decrypt = false) const override {
+        // Vérifier si la clé de décryptage est correcte, mais seulement si l'option decrypt est vraie
+        if (decrypt) {
+            string decryptionKey;
+            cout << "Enter Decryption Key: ";
+            cin >> decryptionKey;
+
+            if (decryptionKey != encryptionKey) {
+                cout << "Decryption Key incorrect. Unable to display passwords." << endl;
+                return;
+            }
+        }
+
         cout << "Stored Passwords:" << endl;
 
         // Select all passwords from the database and display them
@@ -118,26 +130,7 @@ public:
     }
 
     void deletePassword(const string& website) override {
-        string deleteQuery = "DELETE FROM passwords WHERE website = ?;";
-        sqlite3_stmt* stmt;
-        int rc = sqlite3_prepare_v2(db, deleteQuery.c_str(), -1, &stmt, 0);
-
-        if (rc != SQLITE_OK) {
-            cerr << "Error preparing SQL statement: " << sqlite3_errmsg(db) << endl;
-            return;
-        }
-
-        sqlite3_bind_text(stmt, 1, website.c_str(), -1, SQLITE_STATIC);
-
-        rc = sqlite3_step(stmt);
-        if (rc == SQLITE_DONE) {
-            cout << "Password for " << website << " deleted successfully." << endl;
-            count--;
-        } else {
-            cerr << "Error deleting password: " << sqlite3_errmsg(db) << endl;
-        }
-
-        sqlite3_finalize(stmt);
+        // ... (votre code existant pour supprimer le mot de passe)
     }
 };
 
@@ -158,23 +151,11 @@ int main() {
 
         switch (choice) {
             case 1: {
-                string website, username, password;
-                cout << "\nEnter website: ";
-                cin.ignore(); // Clear any previous newline character
-                getline(cin, website);
-                cout << "Enter username: ";
-                getline(cin, username);
-                cout << "Enter password: ";
-                getline(cin, password);
-                passwordManager.addPassword(website, username, password);
+                // ... (votre code existant pour ajouter le mot de passe)
                 break;
             }
             case 2: {
-                string website;
-                cout << "\nEnter website to delete password: ";
-                cin.ignore(); // Clear any previous newline character
-                getline(cin, website);
-                passwordManager.deletePassword(website);
+                // ... (votre code existant pour supprimer le mot de passe)
                 break;
             }
             case 3:
@@ -182,8 +163,6 @@ int main() {
                 passwordManager.displayPasswords();
                 break;
             case 4:
-                cout << "\nEnter Encryption Key: ";
-                cin >> encryptionKey;
                 cout << "\n" << endl;
                 passwordManager.displayPasswords(true); // Pass true to display decrypted passwords
                 break;
@@ -201,3 +180,4 @@ int main() {
 
     return 0;
 }
+
