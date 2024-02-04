@@ -7,6 +7,11 @@
 #include <iostream>
 #include <string>
 #include <sqlite3.h>
+#include <unistd.h>  // Include the <unistd.h> header for getcwd
+#include <limits.h>  // Include the <limits.h> header for PATH_MAX
+#include <libgen.h>   // Pour utiliser dirname
+
+#include <mach-o/dyld.h>  // Pour utiliser _NSGetExecutablePath
 
 using namespace std;
 
@@ -43,7 +48,23 @@ private:
 
 public:
     SQLitePasswordManager() {
-        int rc = sqlite3_open("passwords.db", &db);
+        char exePath[PATH_MAX];
+        uint32_t size = sizeof(exePath);
+        
+        if (_NSGetExecutablePath(exePath, &size) != 0) {
+            cerr << "Error getting executable path" << endl;
+            exit(1);
+        }
+        
+        string executableDir = dirname(exePath);
+           // Construisez le chemin complet de la base de données
+           string dbPath = executableDir + "/passwords.db";
+
+           int rc = sqlite3_open(dbPath.c_str(), &db);
+        
+        
+        
+        //int rc = sqlite3_open("passwords.db", &db);
         if (rc != SQLITE_OK) {
             cerr << "Cannot open the database: " << sqlite3_errmsg(db) << endl;
             exit(1);
@@ -91,6 +112,13 @@ public:
             }
 
             sqlite3_finalize(stmt);
+            // Commit the transaction
+            sqlite3_exec(db, "COMMIT;", 0, 0, 0);
+            
+          
+            
+            
+            
         } else {
             cout << "Maximum credentials limit reached. Cannot add more passwords." << endl;
         }
@@ -154,7 +182,15 @@ public:
 };
 
 int main() {
+    
+    
+    
+    
+    
     SQLitePasswordManager passwordManager;
+    
+
+    
     int choice = 0;
 
     for (; choice != 6;) {
